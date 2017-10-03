@@ -29,12 +29,19 @@ end
 set :port, 80
 set :bind, '0.0.0.0'
 
-before do
-	# TODO: sync mailchimp with database
+get '/' do # home screen
+	"<pre>" + File.readlines(__FILE__).grep(/^(get|post|patch|update|delete)/).join.gsub(' do ', ' ') + "</pre>"
 end
 
-get '/' do # home screen
-	"<pre>" + File.readlines(__FILE__).grep(/^(get|post|patch|update|delete)/).join.gsub(' do ', '') + "</pre>"
+post '/sync' do
+	p = params["data"]["merges"]
+	u = Users.find_by_email(p["EMAIL"])
+	if u.nil?
+		u = Users.create(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"], membershipType: 2)
+	else
+		u = Users.update(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"], membershipType: 2)
+	end
+	u.save!
 end
 
 post '/announcement/event' do # send an event announcment
@@ -54,16 +61,16 @@ post '/announcement/blast' do # send an email blast
 	gibbon.campaigns(blast_campaign_id).content.upsert(body: body)
 end
 
-post '/subscribers' do # add a new subscriber
+post '/subscribers' do # add a new subscriber (for csv imports of members)
 	# TODO: look in database to determine what level member
 	list_id = 0
 	gibbon.lists(list_id).members.create(body: {email_address: params[:email], status: "subscribed", merge_fields: {FNAME: "First Name", LNAME: "Last Name"}})
 end
 
-get '/subscribers/:email' do # get subscriber by their email
+patch '/subscriber/:email' do # update subscriber's membership status
 end
 
-delete '/subscribers/:email' do # delete a subscriber by their email
+get '/subscribers/:email' do # get subscriber by their email
 end
 
 get '/subscribers' do # dump all subscribers
