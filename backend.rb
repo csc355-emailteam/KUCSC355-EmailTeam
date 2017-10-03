@@ -35,11 +35,16 @@ end
 
 post '/sync' do
 	p = params["data"]["merges"]
+	if params["type"] == "unsubscribe"
+		Users.find_by_email(p["EMAIL"]).delete
+		return
+	end
+
 	u = Users.find_by_email(p["EMAIL"])
 	if u.nil?
 		u = Users.create(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"], membershipType: 2)
 	else
-		u = Users.update(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"], membershipType: 2)
+		u.update(fName: p["FNAME"], lName: p["LNAME"], membershipType: 2)
 	end
 	u.save!
 end
