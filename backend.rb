@@ -1,6 +1,7 @@
 require 'sinatra'
 require 'gibbon'
 require 'json'
+require 'yaml'
 
 require 'mysql'
 require 'active_record'
@@ -8,6 +9,9 @@ require 'active_record'
 MAILCHIMP_API_KEY = '18e43d0ddae2a324c534b86401a9cd8b-us16'
 EMAIL_ADDRESS = "no-reply@lv-aitp.org"
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
+
+CONFIG = YAML.load_file('config.yml')
+LIST = CONFIG[:list_id]
 
 def connect_to_database
 	ActiveRecord::Base.establish_connection(
@@ -33,9 +37,14 @@ get '/' do # home screen
 	"<pre>" + File.readlines(__FILE__).grep(/^(get|post|patch|update|delete)/).join.gsub(' do ', ' ') + "</pre>"
 end
 
-post '/sync' do
+
+get '/sync' do # dummy get endpoint to keep mailchimp happy
+end
+
+post '/sync' do # endpoint for mailchimp to post to (keeping databases in sync)
 	p = params["data"]["merges"]
 	if params["type"] == "unsubscribe"
+		# unset opt_in flag
 		Users.find_by_email(p["EMAIL"]).delete
 		return
 	end
@@ -49,13 +58,34 @@ post '/sync' do
 	u.save!
 end
 
-post '/announcement/event' do # send an event announcment
+post '/announcement/schedule' do # schedule email blast
 	# check whether subscriber is member to insert correct price information
 
-	student_aitp_members_id = 0
-	aitp_members_id = 0
-	non_members_id = 0
-	officers_id = 0
+	#student_aitp_members_id = 0
+	#aitp_members_id = 0
+	#non_members_id = 0
+	#officers_id = 0
+
+	recipients = {
+  		list_id: LIST,
+    		segment_opts: {
+        		saved_segment_id: segment_id
+		}
+	}
+	settings = {
+		subject_line: "Event announcement",
+		title: "Event announcement",
+		from_name: "LV AITP",
+		reply_to: "noreply@lv-aitp.org"
+	}
+
+	begin
+		gibbon.campaigns.create(body: {type: "regular", recipients: recipients, settings: settings})
+	rescue Gibbon::MailChimpError => e
+		puts "Houston, we have a problem: #{e.message} - #{e.raw_body}"
+	end
+
+	# Then send
 
 	# send email to speaker
 end
