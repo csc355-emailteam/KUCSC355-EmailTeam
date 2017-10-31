@@ -6,12 +6,13 @@ require 'yaml'
 require 'mysql'
 require 'active_record'
 
-MAILCHIMP_API_KEY = '18e43d0ddae2a324c534b86401a9cd8b-us16'
-EMAIL_ADDRESS = "no-reply@lv-aitp.org"
-gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
-
 CONFIG = YAML.load_file('config.yml')
+EMAIL_ADDRESS = CONFIG[:email_address]
 LIST = CONFIG[:list_id]
+MAILCHIMP_API_KEY = CONFIG[:api_key]
+ANNOUNCEMENT_TEMPLATE = 42153
+
+gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
 
 def connect_to_database
 	ActiveRecord::Base.establish_connection(
@@ -60,12 +61,6 @@ end
 
 post '/announcement/schedule' do # schedule email blast
 	# check whether subscriber is member to insert correct price information
-
-	#student_aitp_members_id = 0
-	#aitp_members_id = 0
-	#non_members_id = 0
-	#officers_id = 0
-
 	recipients = {
   		list_id: LIST,
     		segment_opts: {
@@ -91,9 +86,47 @@ post '/announcement/schedule' do # schedule email blast
 end
 
 post '/announcement/blast' do # send an email blast
-	blast_campaign_id = 0
-	body = { template: { id: template_id, sections: { "name-of-mc-edit-area": "Message content" } } }
-	gibbon.campaigns(blast_campaign_id).content.upsert(body: body)
+	recipients = {
+		list_id: LIST,
+	}
+
+	begin
+		req = JSON.parse(request.body.read)
+	rescue
+		return 400
+	end
+
+	subj = req["subject"]
+	content = req["content"]
+
+	return 400 if (subj.nil? or subj.empty?) or (content.nil? or content.empty?)
+
+	settings = {
+		subject_line: "LV AITP Announcement: #{subj}",
+		title: "#{subj}",
+		from_name: "LV AITP",
+		reply_to: EMAIL_ADDRESS
+	}
+
+	body = {
+		type: "regular",
+		recipients: recipients,
+		settings: settings
+	}
+
+	campaign = gibbon.campaigns.create(body: body)
+
+	body = {
+		template: {
+			id: ANNOUNCEMENT_TEMPLATE,
+			sections: {
+				"body_content": content,
+			}
+		}
+	}
+
+	gibbon.campaigns(campaign.body["id"]).content.upsert(body: body)
+	gibbon.campaigns(campaign.body["id"]).actions.send.create
 end
 
 post '/subscribers' do # add a new subscriber (for csv imports of members)
@@ -103,10 +136,4 @@ post '/subscribers' do # add a new subscriber (for csv imports of members)
 end
 
 patch '/subscriber/:email' do # update subscriber's membership status
-end
-
-get '/subscribers/:email' do # get subscriber by their email
-end
-
-get '/subscribers' do # dump all subscribers
 end

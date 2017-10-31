@@ -2,8 +2,9 @@ require 'gibbon'
 require 'json'
 require 'yaml'
 
-MAILCHIMP_API_KEY = '18e43d0ddae2a324c534b86401a9cd8b-us16'
-EMAIL_ADDRESS = "no-reply@lv-aitp.org"
+config = YAML.load_file('config.yml')
+MAILCHIMP_API_KEY = config[:api_key]
+EMAIL_ADDRESS = config[:email_address]
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
 
 puts "Are you sure you want to clobber the previous list?"
@@ -23,7 +24,8 @@ r = gibbon.lists.create(body: {
 })
 list = r.body["id"]
 
-File.write('config.yml', {list_id: list}.to_yaml)
+config[:list_id] = list
+File.write('config.yml', config.to_yaml)
 
 gibbon.batches.create(body: {
 	operations: [
@@ -41,6 +43,17 @@ gibbon.batches.create(body: {
 			method: "POST",
 			path: "lists/#{list}/merge-fields",
 			body: {tag: "Speaker", name: "ISSPEAKER", type: "radio", required: true, options: {choices: ["Yes", "No"]}}.to_json
+		},
+=begin TODO: make this work
+		{
+			method: "POST",
+			path: "lists/#{list}/segments",
+			body: {name: "Students", options: {
+				conditions: [
+					{condition_type: "SelectMerge", field: "ISSTUDENT", op: "is", value: "Yes"}
+				]
+			}}.to_json
 		}
+=end
 	]
 })
