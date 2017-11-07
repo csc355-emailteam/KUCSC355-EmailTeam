@@ -6,13 +6,64 @@ require 'yaml'
 require 'mysql'
 require 'active_record'
 
+# TODO: do conversion from est -> utc
+
 CONFIG = YAML.load_file('config.yml')
 EMAIL_ADDRESS = CONFIG[:email_address]
 LIST = CONFIG[:list_id]
 MAILCHIMP_API_KEY = CONFIG[:api_key]
-ANNOUNCEMENT_TEMPLATE = 42153
+ANNOUNCEMENT_TEMPLATE = 54201
 
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
+
+def parse_blast_request(body, parse_date = false)
+	begin
+		req = JSON.parse(body)
+	rescue
+		return 400, nil, nil, nil
+	end
+
+	a = []
+	a << req["subject"]
+	a << req["content"]
+	a << req["date"] if parse_date
+
+	return 400, nil, nil, nil if a.map{|e| e.nil? or e.empty?}.any?
+
+	a << nil
+
+	return nil, a[0], a[1], a[2]
+end
+
+def generate_campaign(gibbon, subj, content)
+	settings = {
+		subject_line: "LV AITP Announcement: #{subj}",
+		title: "#{subj}",
+		from_name: "LV AITP",
+		reply_to: EMAIL_ADDRESS
+	}
+
+	body = {
+		type: "regular",
+		recipients: {list_id: LIST},
+		settings: settings
+	}
+
+	campaign = gibbon.campaigns.create(body: body)
+	campaign_id = campaign.body["id"]
+
+	body = {
+		template: {
+			id: ANNOUNCEMENT_TEMPLATE,
+			sections: {
+				"body_content": content,
+			}
+		}
+	}
+
+	gibbon.campaigns(campaign_id).content.upsert(body: body)
+	campaign_id
+end
 
 def connect_to_database
 	ActiveRecord::Base.establish_connection(
@@ -60,73 +111,19 @@ post '/sync' do # endpoint for mailchimp to post to (keeping databases in sync)
 end
 
 post '/announcement/schedule' do # schedule email blast
-	# check whether subscriber is member to insert correct price information
-	recipients = {
-  		list_id: LIST,
-    		segment_opts: {
-        		saved_segment_id: segment_id
-		}
-	}
-	settings = {
-		subject_line: "Event announcement",
-		title: "Event announcement",
-		from_name: "LV AITP",
-		reply_to: "noreply@lv-aitp.org"
-	}
+	err, subj, content, date = parse_blast_request(request.body.read, true)
+	return err if err != nil
 
-	begin
-		gibbon.campaigns.create(body: {type: "regular", recipients: recipients, settings: settings})
-	rescue Gibbon::MailChimpError => e
-		puts "Houston, we have a problem: #{e.message} - #{e.raw_body}"
-	end
-
-	# Then send
-
-	# send email to speaker
+	campaign_id = generate_campaign(gibbon, subj, content)
+	gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: date})
 end
 
 post '/announcement/blast' do # send an email blast
-	recipients = {
-		list_id: LIST,
-	}
+	err, subj, content, date = parse_blast_request(request.body.read)
+	return err if err != nil
 
-	begin
-		req = JSON.parse(request.body.read)
-	rescue
-		return 400
-	end
-
-	subj = req["subject"]
-	content = req["content"]
-
-	return 400 if (subj.nil? or subj.empty?) or (content.nil? or content.empty?)
-
-	settings = {
-		subject_line: "LV AITP Announcement: #{subj}",
-		title: "#{subj}",
-		from_name: "LV AITP",
-		reply_to: EMAIL_ADDRESS
-	}
-
-	body = {
-		type: "regular",
-		recipients: recipients,
-		settings: settings
-	}
-
-	campaign = gibbon.campaigns.create(body: body)
-
-	body = {
-		template: {
-			id: ANNOUNCEMENT_TEMPLATE,
-			sections: {
-				"body_content": content,
-			}
-		}
-	}
-
-	gibbon.campaigns(campaign.body["id"]).content.upsert(body: body)
-	gibbon.campaigns(campaign.body["id"]).actions.send.create
+	campaign_id = generate_campaign(gibbon, subj, content)
+	gibbon.campaigns(campaign_id).actions.send.create
 end
 
 post '/subscribers' do # add a new subscriber (for csv imports of members)
