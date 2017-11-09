@@ -1,4 +1,6 @@
 ---
 :api_key: 8a80f760a0664ac1c8ee6a8434645868-us16
 :list_id: a5d7bd71a9
+:email_template_id: 54201
 :email_address: csc355.emailteam@gmail.com
+:port: 81

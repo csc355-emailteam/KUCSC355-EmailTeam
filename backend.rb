@@ -12,7 +12,7 @@ CONFIG = YAML.load_file('config.yml')
 EMAIL_ADDRESS = CONFIG[:email_address]
 LIST = CONFIG[:list_id]
 MAILCHIMP_API_KEY = CONFIG[:api_key]
-ANNOUNCEMENT_TEMPLATE = 54201
+ANNOUNCEMENT_TEMPLATE = CONFIG[:email_template_id]
 
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
 
@@ -82,7 +82,7 @@ connect_to_database
 class Users < ActiveRecord::Base
 end
 
-set :port, 80
+set :port, CONFIG[:port]
 set :bind, '0.0.0.0'
 
 get '/' do # home screen
