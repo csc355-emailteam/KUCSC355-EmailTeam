@@ -7,7 +7,7 @@ MAILCHIMP_API_KEY = config[:api_key]
 EMAIL_ADDRESS = config[:email_address]
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
 
-puts "Are you sure you want to clobber the previous list?"
+puts "Are you sure you want to clobber the previous MailChimp configuration?"
 abort "bailing" if gets.chomp![0] != "y"
 
 r = gibbon.lists.create(body: {
