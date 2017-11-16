@@ -25,35 +25,8 @@ r = gibbon.lists.create(body: {
 list = r.body["id"]
 
 config[:list_id] = list
-File.write('config.yml', config.to_yaml)
+config[:students_segment] = gibbon.lists(list).segments.create(body: {name: "Students", static_segment: []}).body["id"]
+config[:members_segment] = gibbon.lists(list).segments.create(body: {name: "Members",  static_segment: []}).body["id"]
+config[:speakers_segment] = gibbon.lists(list).segments.create(body: {name: "Speakers", static_segment: []}).body["id"]
 
-gibbon.batches.create(body: {
-	operations: [
-		{
-			method: "POST",
-			path: "lists/#{list}/merge-fields",
-			body: {tag: "Student", name: "ISSTUDENT", type: "radio", required: true, options: {choices: ["Yes", "No"]}}.to_json
-		},
-		{
-			method: "POST",
-			path: "lists/#{list}/merge-fields",
-			body: {tag: "Member", name: "ISMEMBER", type: "radio", required: true, options: {choices: ["Yes", "No"]}}.to_json
-		},
-		{
-			method: "POST",
-			path: "lists/#{list}/merge-fields",
-			body: {tag: "Speaker", name: "ISSPEAKER", type: "radio", required: true, options: {choices: ["Yes", "No"]}}.to_json
-		},
-=begin TODO: make this work
-		{
-			method: "POST",
-			path: "lists/#{list}/segments",
-			body: {name: "Students", options: {
-				conditions: [
-					{condition_type: "SelectMerge", field: "ISSTUDENT", op: "is", value: "Yes"}
-				]
-			}}.to_json
-		}
-=end
-	]
-})
+File.write('config.yml', config.to_yaml)

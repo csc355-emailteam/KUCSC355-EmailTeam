@@ -16,11 +16,15 @@ ANNOUNCEMENT_TEMPLATE = CONFIG[:email_template_id]
 
 gibbon = Gibbon::Request.new(api_key: MAILCHIMP_API_KEY)
 
+def any_empty?(arr)
+	arr.map{|e| e.nil? or e.empty?}.any?
+end
+
 def parse_blast_request(body, parse_date = false)
 	begin
 		req = JSON.parse(body)
 	rescue
-		return 400, nil, nil, nil
+		return "Malformed post body JSON", nil, nil, nil
 	end
 
 	a = []
@@ -28,14 +32,14 @@ def parse_blast_request(body, parse_date = false)
 	a << req["content"]
 	a << req["date"] if parse_date
 
-	return 400, nil, nil, nil if a.map{|e| e.nil? or e.empty?}.any?
+	return "Need subject, content #{", date" if parse_date} fields in request", nil, nil, nil if any_empty? a
 
 	a << nil
 
 	return nil, a[0], a[1], a[2]
 end
 
-def generate_campaign(gibbon, subj, content)
+def generate_campaign(gibbon, subj, content, segment=nil)
 	settings = {
 		subject_line: "LV AITP Announcement: #{subj}",
 		title: "#{subj}",
@@ -43,9 +47,14 @@ def generate_campaign(gibbon, subj, content)
 		reply_to: EMAIL_ADDRESS
 	}
 
+	r = {list_id: LIST}
+	unless segment.nil?
+		r[:segment_opts] = {saved_segment_id: segment}
+	end
+
 	body = {
 		type: "regular",
-		recipients: {list_id: LIST},
+		recipients: r,
 		settings: settings
 	}
 
@@ -112,7 +121,7 @@ end
 
 post '/announcement/schedule' do # schedule email blast
 	err, subj, content, date = parse_blast_request(request.body.read, true)
-	return err if err != nil
+	error 400, err if err != nil
 
 	campaign_id = generate_campaign(gibbon, subj, content)
 	gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: date})
@@ -120,17 +129,20 @@ end
 
 post '/announcement/blast' do # send an email blast
 	err, subj, content, date = parse_blast_request(request.body.read)
-	return err if err != nil
+	error 400, err if err != nil
 
 	campaign_id = generate_campaign(gibbon, subj, content)
 	gibbon.campaigns(campaign_id).actions.send.create
 end
 
 post '/subscribers' do # add a new subscriber (for csv imports of members)
-	# TODO: look in database to determine what level member
-	list_id = 0
-	gibbon.lists(list_id).members.create(body: {email_address: params[:email], status: "subscribed", merge_fields: {FNAME: "First Name", LNAME: "Last Name"}})
+	b = JSON.parse(request.body.read)
+	error 400, "Need email, fname and lname" if any_empty?([b['email'], b['fname'], b['lname']])
+	gibbon.lists(LIST).members.create(body: {email_address: b['email'], status: "subscribed", merge_fields: {FNAME: b['fname'], LNAME: b['lname']}})
 end
 
-patch '/subscriber/:email' do # update subscriber's membership status
+VALID_SEGMENTS = CONFIG.keys.grep(/segment/).map{|s| s.to_s.split("_").first}
+patch '/subscriber/:list/:email' do # update subscriber's membership status
+	error 400, "Illegal list #{params[:list]} - should be one of #{VALID_SEGMENTS}" unless VALID_SEGMENTS.include?(params[:list])
+	gibbon.lists(LIST).segments(CONFIG[(params[:list] + "_segment").to_sym]).create(body: {members_to_add: [params[:email]]})
 end

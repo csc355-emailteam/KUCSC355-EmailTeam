@@ -1,6 +1,9 @@
 ---
 :api_key: 8a80f760a0664ac1c8ee6a8434645868-us16
-:list_id: a5d7bd71a9
+:list_id: 914cebd3f1
 :email_template_id: 54201
 :email_address: csc355.emailteam@gmail.com
 :port: 81
+:students_segment: 10353
+:members_segment: 10357
+:speakers_segment: 10361
