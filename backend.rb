@@ -77,10 +77,10 @@ end
 def connect_to_database
 	ActiveRecord::Base.establish_connection(
 		:adapter  => 'mysql2',
-		:host     => 'devdbinstance.cczy5zayfult.us-east-2.rds.amazonaws.com',
-		:username => 'master',
-		:password => 'Goldenbears4lyfe!',
-		:database => 'dbEnvironment',
+		:host     => CONFIG[:db_host],
+		:username => CONFIG[:db_user],
+		:password => CONFIG[:db_pass],
+		:database => CONFIG[:db_name],
 		:port	  => 3306,
 		:encoding => 'utf8'
 	)
@@ -89,6 +89,12 @@ end
 connect_to_database
 
 class Users < ActiveRecord::Base
+	self.table_name = 'User'
+end
+
+VALID_SEGMENTS = CONFIG.keys.grep(/segment/).map{|s| s.to_s.split("_").first}
+def assert_valid_segment!(s)
+	error 400, "Illegal list #{params[:list]} - should be one of #{VALID_SEGMENTS}" unless VALID_SEGMENTS.include?(s)
 end
 
 set :port, CONFIG[:port]
@@ -112,9 +118,9 @@ post '/sync' do # endpoint for mailchimp to post to (keeping databases in sync)
 
 	u = Users.find_by_email(p["EMAIL"])
 	if u.nil?
-		u = Users.create(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"], membershipType: 2)
+		u = Users.create(fName: p["FNAME"], lName: p["LNAME"], email: p["EMAIL"])
 	else
-		u.update(fName: p["FNAME"], lName: p["LNAME"], membershipType: 2)
+		u.update(fName: p["FNAME"], lName: p["LNAME"])
 	end
 	u.save!
 end
@@ -135,14 +141,27 @@ post '/announcement/blast' do # send an email blast
 	gibbon.campaigns(campaign_id).actions.send.create
 end
 
+def add_to_segment(gibbon, segment, add = [], rem = [])
+	assert_valid_segment! segment
+	r = gibbon.lists(LIST).segments(CONFIG[(segment + "_segment").to_sym]).create(body: 
+		{
+			members_to_add: add || [],
+			members_to_remove: rem || []
+		})
+	error 200, {message: "Finished request, but with errors", result: r.body["errors"]}.to_json unless r.body["errors"].empty?
+	200
+end
+
 post '/subscribers' do # add a new subscriber (for csv imports of members)
 	b = JSON.parse(request.body.read)
 	error 400, "Need email, fname and lname" if any_empty?([b['email'], b['fname'], b['lname']])
 	gibbon.lists(LIST).members.create(body: {email_address: b['email'], status: "subscribed", merge_fields: {FNAME: b['fname'], LNAME: b['lname']}})
+	if b['list']
+		add_to_segment(gibbon, b['list'], b['add'], b['remove'])
+	end
 end
 
-VALID_SEGMENTS = CONFIG.keys.grep(/segment/).map{|s| s.to_s.split("_").first}
-patch '/subscriber/:list/:email' do # update subscriber's membership status
-	error 400, "Illegal list #{params[:list]} - should be one of #{VALID_SEGMENTS}" unless VALID_SEGMENTS.include?(params[:list])
-	gibbon.lists(LIST).segments(CONFIG[(params[:list] + "_segment").to_sym]).create(body: {members_to_add: [params[:email]]})
+patch '/subscriber/:list' do # update subscriber's membership status
+	j = JSON.parse(request.body.read)
+	add_to_segment(params['list'], j['add'], j['remove'])
 end

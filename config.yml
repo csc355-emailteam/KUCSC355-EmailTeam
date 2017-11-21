@@ -7,3 +7,7 @@
 :students_segment: 10353
 :members_segment: 10357
 :speakers_segment: 10361
+:db_host: csc355-db-group.cfwk8ozvku9e.us-east-2.rds.amazonaws.com 
+:db_user: DB_Group
+:db_pass: Starwars001
+:db_name: dbGroup
