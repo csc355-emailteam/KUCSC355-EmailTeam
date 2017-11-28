@@ -2,6 +2,7 @@ require 'sinatra'
 require 'gibbon'
 require 'json'
 require 'yaml'
+require 'tzinfo'
 
 require 'mysql'
 require 'active_record'
@@ -125,12 +126,14 @@ post '/sync' do # endpoint for mailchimp to post to (keeping databases in sync)
 	u.save!
 end
 
+tz = TZInfo::Timezone.get('America/New_York')
+
 post '/announcement/schedule' do # schedule email blast
 	err, subj, content, date = parse_blast_request(request.body.read, true)
 	error 400, err if err != nil
 
 	campaign_id = generate_campaign(gibbon, subj, content)
-	gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: date})
+	gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: tz.local_to_utc(Time.parse(date))})
 end
 
 post '/announcement/blast' do # send an email blast

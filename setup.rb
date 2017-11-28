@@ -24,6 +24,11 @@ r = gibbon.lists.create(body: {
 })
 list = r.body["id"]
 
+gibbon.lists(list).webhooks.create(body: {
+	url: "http://ec2-18-221-141-67.us-east-2.compute.amazonaws.com:81/sync",
+	events: {subscribe: true, unsubscribe: true, profile: true},
+})
+
 config[:list_id] = list
 config[:students_segment] = gibbon.lists(list).segments.create(body: {name: "Students", static_segment: []}).body["id"]
 config[:members_segment] = gibbon.lists(list).segments.create(body: {name: "Members",  static_segment: []}).body["id"]
