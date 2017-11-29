@@ -1,1 +1,1 @@
-nohup sudo backend.rb &
+nohup sudo ruby backend.rb &

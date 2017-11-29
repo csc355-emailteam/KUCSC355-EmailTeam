@@ -132,16 +132,38 @@ post '/announcement/schedule' do # schedule email blast
 	err, subj, content, date = parse_blast_request(request.body.read, true)
 	error 400, err if err != nil
 
-	campaign_id = generate_campaign(gibbon, subj, content)
-	gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: tz.local_to_utc(Time.parse(date))})
+	segments = params["lists"]
+	if !segments.nil?
+		segments.each do |s|
+			assert_valid_segment! s
+		end
+		segments.each do |s|
+			campaign_id = generate_campaign(gibbon, subj, content, CONFIG[(s + "_segment").to_sym])
+			gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: tz.local_to_utc(Time.parse(date))})
+		end
+	else
+		campaign_id = generate_campaign(gibbon, subj, content, nil)
+		gibbon.campaigns(campaign_id).actions.schedule.create(body: {schedule_time: tz.local_to_utc(Time.parse(date))})
+	end
 end
 
 post '/announcement/blast' do # send an email blast
 	err, subj, content, date = parse_blast_request(request.body.read)
 	error 400, err if err != nil
 
-	campaign_id = generate_campaign(gibbon, subj, content)
-	gibbon.campaigns(campaign_id).actions.send.create
+	segments = params["lists"]
+	if !segments.nil?
+		segments.each do |s|
+			assert_valid_segment! s
+		end
+		segments.each do |s|
+			campaign_id = generate_campaign(gibbon, subj, content, CONFIG[(s + "_segment").to_sym])
+			gibbon.campaigns(campaign_id).actions.send.create
+		end
+	else
+		campaign_id = generate_campaign(gibbon, subj, content, nil)
+		gibbon.campaigns(campaign_id).actions.send.create
+	end
 end
 
 def add_to_segment(gibbon, segment, add = [], rem = [])
